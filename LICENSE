@@ -1,0 +1,48 @@
+
+## 2. Root `.gitignore`
+
+Path: `GeoFlare/.gitignore`
+
+Ye important hai, bhai. Isse virtual environment, secret keys aur bade raw datasets galti se GitHub par push nahi honge.
+
+```gitignore
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Generated data
+data/raw/*
+data/interim/*
+data/processed/*
+
+# Keep folder documentation and sample datasets
+!data/raw/**/README.md
+!data/interim/**/README.md
+!data/processed/**/README.md
+!data/samples/**
+
+# Logs and editor settings
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
