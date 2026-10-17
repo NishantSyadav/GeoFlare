@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "evidence": "User-provided FIRMS email screenshots reviewed in ChatGPT; request metadata transcribed from the user's verified table on 2026-10-17.",
+  "date_bounds": "inclusive",
+  "requests": [
+    {
+      "request_id": "42739",
+      "dataset": "DL_FIRE_M-C61_42739",
+      "product": "MODIS C6.1",
+      "source_product": "M-C61",
+      "area": "India",
+      "format": "CSV",
+      "requested_start": "2022-01-01",
+      "requested_end": "2022-12-31",
+      "response_status": "dataset_supplied"
+    },
+    {
+      "request_id": "42740",
+      "dataset": "DL_FIRE_J1V-C2_42740",
+      "product": "J1 VIIRS C2",
+      "source_product": "J1V-C2",
+      "area": "India",
+      "format": "CSV",
+      "requested_start": "2022-01-01",
+      "requested_end": "2022-12-31",
+      "response_status": "dataset_supplied"
+    },
+    {
+      "request_id": "42741",
+      "dataset": "DL_FIRE_J2V-C2_42741",
+      "product": "J2 VIIRS C2",
+      "source_product": "J2V-C2",
+      "area": "India",
+      "format": "CSV",
+      "requested_start": "2022-01-01",
+      "requested_end": "2022-12-31",
+      "response_status": "no_matching_fires_no_dataset",
+      "response_message": "could not find any matching fires",
+      "interpretation": "No dataset was supplied. This does not establish zero actual fires."
+    },
+    {
+      "request_id": "42742",
+      "dataset": "DL_FIRE_M-C61_42742",
+      "product": "MODIS C6.1",
+      "source_product": "M-C61",
+      "area": "India",
+      "format": "CSV",
+      "requested_start": "2023-01-01",
+      "requested_end": "2023-12-31",
+      "response_status": "dataset_supplied"
+    },
+    {
+      "request_id": "42743",
+      "dataset": "DL_FIRE_J1V-C2_42743",
+      "product": "J1 VIIRS C2",
+      "source_product": "J1V-C2",
+      "area": "India",
+      "format": "CSV",
+      "requested_start": "2023-01-01",
+      "requested_end": "2023-12-31",
+      "response_status": "dataset_supplied"
+    },
+    {
+      "request_id": "42744",
+      "dataset": "DL_FIRE_J2V-C2_42744",
+      "product": "J2 VIIRS C2",
+      "source_product": "J2V-C2",
+      "area": "India",
+      "format": "CSV",
+      "requested_start": "2023-01-01",
+      "requested_end": "2023-12-31",
+      "response_status": "dataset_supplied"
+    },
+    {
+      "request_id": "42745",
+      "dataset": "DL_FIRE_M-C61_42745",
+      "product": "MODIS C6.1",
+      "source_product": "M-C61",
+      "area": "India",
+      "format": "CSV",
+      "requested_start": "2024-01-01",
+      "requested_end": "2024-12-31",
+      "response_status": "dataset_supplied"
+    },
+    {
+      "request_id": "42746",
+      "dataset": "DL_FIRE_J1V-C2_42746",
+      "product": "J1 VIIRS C2",
+      "source_product": "J1V-C2",
+      "area": "India",
+      "format": "CSV",
+      "requested_start": "2024-01-01",
+      "requested_end": "2024-12-31",
+      "response_status": "dataset_supplied"
+    },
+    {
+      "request_id": "42747",
+      "dataset": "DL_FIRE_J2V-C2_42747",
+      "product": "J2 VIIRS C2",
+      "source_product": "J2V-C2",
+      "area": "India",
+      "format": "CSV",
+      "requested_start": "2024-01-01",
+      "requested_end": "2024-12-31",
+      "response_status": "dataset_supplied"
+    },
+    {
+      "request_id": "42748",
+      "dataset": "DL_FIRE_M-C61_42748",
+      "product": "MODIS C6.1",
+      "source_product": "M-C61",
+      "area": "India",
+      "format": "CSV",
+      "requested_start": "2025-01-01",
+      "requested_end": "2025-12-01",
+      "response_status": "dataset_supplied"
+    },
+    {
+      "request_id": "42749",
+      "dataset": "DL_FIRE_J1V-C2_42749",
+      "product": "J1 VIIRS C2",
+      "source_product": "J1V-C2",
+      "area": "India",
+      "format": "CSV",
+      "requested_start": "2025-01-01",
+      "requested_end": "2025-12-01",
+      "response_status": "dataset_supplied"
+    },
+    {
+      "request_id": "42750",
+      "dataset": "DL_FIRE_J2V-C2_42750",
+      "product": "J2 VIIRS C2",
+      "source_product": "J2V-C2",
+      "area": "India",
+      "format": "CSV",
+      "requested_start": "2025-01-01",
+      "requested_end": "2025-12-01",
+      "response_status": "dataset_supplied"
+    }
+  ]
+}

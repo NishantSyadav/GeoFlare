@@ -11,7 +11,7 @@ it does not independently establish sensor accuracy or observation coverage.
 
 import argparse
 from collections import Counter
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import csv
 import gzip
 import hashlib
@@ -32,6 +32,135 @@ from cleaning.clean_records import (
 from schemas.hotspot_schema import PIPELINE_VERSION, normalize_record
 
 COUNT_FIELDS = ("input_rows", "accepted_rows", "rejected_rows", "duplicate_rows")
+REQUEST_MANIFEST = PROJECT_ROOT / "data" / "metadata" / "firms_requests.json"
+
+
+def load_requests(path):
+    """Missing metadata stays unknown; malformed metadata is an error."""
+    if not path.exists():
+        return {}
+    manifest = json.loads(path.read_text(encoding="utf-8-sig"))
+    require(manifest["schema_version"] == 1, "Unsupported request manifest version")
+    require(manifest["date_bounds"] == "inclusive", "Request dates must be inclusive")
+    require(isinstance(manifest["evidence"], str) and manifest["evidence"],
+            "Missing request evidence")
+    require(isinstance(manifest["requests"], list), "Expected request list")
+    requests, identifiers = {}, set()
+    for request in manifest["requests"]:
+        identifier = request["request_id"]
+        require(isinstance(identifier, str) and identifier.isdecimal(), "Invalid request ID")
+        product = request["source_product"]
+        require(product in {"M-C61", "J1V-C2", "J2V-C2"}, "Unknown request product")
+        name = request["dataset"]
+        require(name == f"DL_FIRE_{product}_{identifier}", "Request dataset/ID/product mismatch")
+        require(name not in requests and identifier not in identifiers, "Repeated request metadata")
+        for key in ("requested_start", "requested_end"):
+            require(date.fromisoformat(request[key]).isoformat() == request[key],
+                    f"{name}: invalid {key}")
+        require(request["requested_start"] <= request["requested_end"],
+                f"{name}: reversed request interval")
+        require(request["area"] == "India" and request["format"] == "CSV",
+                f"{name}: unsupported request area/format")
+        require(request["response_status"] in {"dataset_supplied", "no_matching_fires_no_dataset"},
+                f"{name}: unknown response status")
+        requests[name] = dict(request, evidence=manifest["evidence"])
+        identifiers.add(identifier)
+    return requests
+
+
+def calendar_days(start, end):
+    """ISO dates in an inclusive interval, including leap days."""
+    current = date.fromisoformat(start)
+    last = date.fromisoformat(end)
+    while current <= last:
+        yield current.isoformat()
+        if current == last:
+            break
+        current += timedelta(days=1)
+
+
+def request_coverage(dataset, input_dates, request):
+    """Classify supplied input dates, never infer a request from observations.
+
+    None means the dataset is not in this run; an empty dict means known empty
+    input. Calendar context spans the request and supplied observation years.
+    Counts use input dates, including records later rejected or deduplicated.
+    """
+    result = {
+        "dataset": dataset,
+        "metadata_status": "documented" if request else "unknown",
+        "records_status": "in_run" if input_dates is not None else "not_in_run",
+        "request": request,
+        "calendar_context_start": None, "calendar_context_end": None,
+        "dates_outside_request": None,
+        "dates_inside_request_without_supplied_records": None,
+        "observations_outside_request_by_date": None,
+        "investigation_required": None,
+    }
+    if request is None:
+        return result
+    start, end = request["requested_start"], request["requested_end"]
+    if input_dates is None and request["response_status"] == "no_matching_fires_no_dataset":
+        input_dates = {}
+        result["records_status"] = "no_dataset_supplied"
+    observed = sorted(input_dates or {})
+    first = min([start] + observed)
+    last = max([end] + observed)
+    context_start, context_end = first[:4] + "-01-01", last[:4] + "-12-31"
+    result.update(
+        calendar_context_start=context_start, calendar_context_end=context_end,
+        dates_outside_request=[day for day in calendar_days(context_start, context_end)
+                               if day < start or day > end],
+    )
+    if input_dates is not None:
+        outside = {day: input_dates[day] for day in observed if day < start or day > end}
+        result.update(
+            dates_inside_request_without_supplied_records=[
+                day for day in calendar_days(start, end) if day not in input_dates],
+            observations_outside_request_by_date=outside,
+            investigation_required=(bool(outside) or (
+                result["records_status"] == "in_run" and
+                request["response_status"] == "no_matching_fires_no_dataset")),
+        )
+    return result
+
+
+def coverage_warnings(coverage):
+    name = coverage["dataset"]
+    if coverage["metadata_status"] == "unknown":
+        return [f"{name}: request metadata unknown; request coverage cannot be classified"]
+    warnings = []
+    missing = coverage["dates_inside_request_without_supplied_records"]
+    if missing is None:
+        warnings.append(f"{name}: documented request not in this run; supplied records unknown")
+    elif missing:
+        warnings.append(f"{name}: {len(missing)} dates inside the inclusive request have no "
+                        "supplied records; cause unknown, not evidence of zero fires")
+    outside = coverage["observations_outside_request_by_date"]
+    if outside:
+        warnings.append(f"{name}: {sum(outside.values())} input observations on {len(outside)} "
+                        "dates outside the documented request; investigation required")
+    if (coverage["records_status"] == "in_run" and
+            coverage["request"]["response_status"] == "no_matching_fires_no_dataset"):
+        warnings.append(f"{name}: dataset present despite documented no-dataset response; "
+                        "request evidence needs review")
+    return warnings
+
+
+def build_request_coverage(datasets, requests):
+    coverage = []
+    supplied = set()
+    for dataset in datasets:
+        name = dataset["dataset"]
+        request = requests.get(name)
+        if request:
+            require(dataset["source_product"] == request["source_product"],
+                    f"{name}: source product differs from request metadata")
+        coverage.append(request_coverage(name, dataset["input_rows_by_date"], request))
+        supplied.add(name)
+    for name in sorted(requests.keys() - supplied):
+        coverage.append(request_coverage(name, None, requests[name]))
+    return coverage
 
 
 def require(condition, message):
@@ -231,12 +360,19 @@ def check_audits(report, run, connection):
     return audit_counts
 
 
-def validate(run, result):
+def validate(run, result, request_manifest=REQUEST_MANIFEST):
     report_path = run / "processing_report.json"
     report_hash = sha256_file(report_path)
     report = json.loads(report_path.read_text(encoding="utf-8-sig"))
     result["processing_report_sha256"] = report_hash
     check_metadata(report)
+    manifest_hash = sha256_file(request_manifest) if request_manifest.exists() else None
+    requests = load_requests(request_manifest)
+    result["request_manifest"] = {"path": str(request_manifest), "sha256": manifest_hash,
+                                  "status": "loaded" if manifest_hash else "unknown"}
+    result["request_coverage"] = build_request_coverage(report["datasets"], requests)
+    for coverage in result["request_coverage"]:
+        result["warnings"].extend(coverage_warnings(coverage))
     for filename, key in (("schemas/hotspot_schema.py", "normalizer_sha256"),
                           ("cleaning/clean_records.py", "processor_sha256")):
         check_code(PIPELINE_DIR / filename, report[key], result["warnings"])
@@ -256,10 +392,6 @@ def validate(run, result):
                 print(f"\nValidating {i + 1}/{len(report['datasets'])}: {d['dataset']}", flush=True)
                 item = check_dataset(d, run, connection, i)
                 result["datasets"].append(item)
-                if item["dates_without_supplied_records"]:
-                    result["warnings"].append(
-                        f"{d['dataset']}: {len(item['dates_without_supplied_records'])} "
-                        "calendar dates have no supplied records; coverage/cause unknown")
                 if item["quality_flags"]:
                     result["warnings"].append(f"{d['dataset']}: retained quality flags need review")
             unique = connection.execute("SELECT COUNT(*) FROM seen").fetchone()[0]
@@ -269,20 +401,48 @@ def validate(run, result):
         finally:
             connection.close()
     require(sha256_file(report_path) == report_hash, "Processing report changed during validation")
+    require((sha256_file(request_manifest) if request_manifest.exists() else None) == manifest_hash,
+            "Request manifest changed during validation")
     result["totals"] = report["totals"]
     result["status"] = "passed"
+
+
+def write_validation_report(path, result, overwrite=False):
+    """Explicit destinations use exclusive creation, including at write time."""
+    payload = json.dumps(result, indent=2, allow_nan=False)
+    if not overwrite:
+        with path.open("x", encoding="utf-8") as handle:
+            handle.write(payload)
+        return
+    # Preserve the legacy default's replace behavior for existing callers.
+    temporary_path = path.with_name("." + path.name + ".tmp")
+    temporary_path.write_text(payload, encoding="utf-8")
+    temporary_path.replace(path)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", required=True, type=Path, help="Completed run folder")
+    parser.add_argument("--request-manifest", type=Path, default=REQUEST_MANIFEST,
+                        help="Request metadata JSON; missing file means unknown request metadata")
+    parser.add_argument("--report", type=Path,
+                        help="New report path (relative to run directory or absolute); refuses overwrite. "
+                             "Default: replace validation_report.json in the run directory")
     args = parser.parse_args()
     run = args.run if args.run.is_absolute() else PROJECT_ROOT / args.run
     run = run.resolve()
     if not run.is_dir():
         parser.error(f"Run directory not found: {run}")
+    report_path = args.report if args.report is not None else Path("validation_report.json")
+    if not report_path.is_absolute():
+        report_path = run / report_path
+    if args.report is not None:
+        if report_path.exists() or report_path.is_symlink():
+            parser.error(f"Report destination already exists; refusing overwrite: {report_path}")
+        if not report_path.parent.is_dir():
+            parser.error(f"Report parent directory not found: {report_path.parent}")
     result = {
-        "status": "running", "validator_version": "validation-v1",
+        "status": "running", "validator_version": "validation-v2",
         "run_directory": str(run),
         "started_at_utc": datetime.now(timezone.utc).isoformat(),
         "datasets": [], "warnings": [],
@@ -290,22 +450,25 @@ def main():
             "Passed means saved outputs are consistent with the processing report and current schema.",
             "This reuses normalize_record; it is not independent scientific validation of that function.",
             "Absent dates do not establish zero fires or a sensor outage; coverage is unknown.",
+            "Request dates are inclusive; request_coverage uses supplied input dates, not accepted dates.",
+            "Dataset dates_without_supplied_records is the legacy calendar-year gap list, not request coverage.",
+            "Outside-request observations require investigation even when integrity checks pass.",
             "Normalized observations are not harmonized fire-activity estimates.",
             "Source CSVs and saved outputs are opened read-only. Only this validation report is saved.",
         ],
     }
     try:
-        validate(run, result)
+        request_manifest = args.request_manifest
+        if not request_manifest.is_absolute():
+            request_manifest = PROJECT_ROOT / request_manifest
+        validate(run, result, request_manifest)
     except (OSError, EOFError, ValueError, KeyError, TypeError, AttributeError, sqlite3.Error) as error:
         result["status"] = "failed"
         result["error"] = str(error)
     result["finished_at_utc"] = datetime.now(timezone.utc).isoformat()
     # One small report replaces terminal dumps of thousands of date counts.
-    report_path = run / "validation_report.json"
-    temporary_path = run / ".validation_report.json.tmp"
     try:
-        temporary_path.write_text(json.dumps(result, indent=2, allow_nan=False), encoding="utf-8")
-        temporary_path.replace(report_path)
+        write_validation_report(report_path, result, overwrite=args.report is None)
     except OSError as error:
         print(f"FAILED to save validation report: {error}", file=sys.stderr)
         return 1
