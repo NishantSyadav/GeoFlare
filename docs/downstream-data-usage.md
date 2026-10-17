@@ -95,13 +95,18 @@ run has 11 integrity results and 12 request-coverage entries. Dates are ISO
 | `observations_outside_request_by_date` | object or null | Date keys mapped to positive input-row counts outside the request; null if metadata or supplied records are unknown |
 | `investigation_required` | boolean or null | True for outside-request observations or a dataset conflicting with a documented no-dataset response; null when the relevant evidence is unknown |
 
-Each non-null `request` contains string fields `request_id`, `dataset`, `product`
+For the documented archive-email manifest, each non-null `request` contains string fields `request_id`, `dataset`, `product`
 (display label), `source_product` (pipeline code), `area`, `format`,
 `requested_start`, `requested_end`, `response_status`, and `evidence`.
 `response_status` is `dataset_supplied` or `no_matching_fires_no_dataset`.
 The 42741 entry additionally contains `response_message` and `interpretation`.
 The manifest's top-level `date_bounds: inclusive` is enforced when loaded; the
 loader copies its evidence text into each report request object.
+
+Saved API manifests can instead supply an explicit bounding-box request. Its
+`request` object has no archive request ID; see [api-ingestion.md](api-ingestion.md)
+for that variant and its adapter/implementation provenance. Match on `dataset`
+and inspect source metadata rather than requiring a request ID in every entry.
 
 Top-level `request_manifest` contains `path` (string), `sha256` (string or null),
 and `status` (`loaded` or `unknown`). It identifies the manifest used for the

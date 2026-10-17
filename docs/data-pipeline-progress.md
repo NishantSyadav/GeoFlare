@@ -14,11 +14,21 @@ Updated 17 October 2026. Branch: `feature/sayem-data-pipeline`.
 - All 55 original files matched the ORIGINAL saved baseline after validation. No production cleaning was rerun.
 - Original baseline and verification summary: `C:/Users/2k25a/AppData/Local/Temp/geoflare-review-38iahrab/`. The review ZIP also carries these evidence files.
 - Review ZIP target: `C:/Users/2k25a/Downloads/GeoFlare_Review_Bundle.zip`.
-- Commit/push: pending this checkpoint; record resulting hashes in the next checkpoint.
+- Commit/push: `87608ba` committed and pushed to origin/feature/sayem-data-pipeline.
+- Review ZIP delivered and hash verified: `e26aab2c851674cefe2ee0c3d382384ad92b9585c55280baab7e096949f12662`. This is the phase-1 pre-commit review snapshot; later API work is in subsequent commits.
+
+## Phase 2: saved-response ingestion
+
+- Implemented versioned source descriptors and CSV adapter registry. API inputs use the shared processor, normalizer, IDs, deduplication and original-row audits; no fake request IDs or ZIPs.
+- Added manifest CLI, adapter replay validation and explicit `cleaning-v2` implementation provenance. The original cleaner snapshot preserves strict legacy fingerprint verification.
+- Eight new API regression tests passed, plus 12 cleaning/reader and 18 coverage/report-output tests (38 total). Canonical expectations and six original fixture files remain unchanged.
+- Documented descriptor shape, band aliases, exact API source IDs, NRT/SP distinctions, missing type and request-coverage variants in `docs/api-ingestion.md`.
+- Phase-2 commit/push pending; record hash in the next checkpoint.
+- NASA area, availability and tutorial pages reviewed 17 October 2026. `FIRMS_MAP_KEY` absent from the current environment; no live API request attempted.
 
 ## Remaining phases
 
-2. Implement explicit offline API source descriptors and registered adapters using the shared canonical normalizer/record identity/deduplication path. Preserve archive behavior and legacy implementation provenance.
+2. Saved-response implementation complete; checkpoint commit/push next.
 3. Check official FIRMS docs, implement bounded fetch/availability/retries/raw-byte provenance, offline tests, and a live smoke test only if an environment key exists.
 4. Finish instructions and handoff, run relevant small tests, commit explicit paths and push logical checkpoints. Do not merge main or send messages.
 

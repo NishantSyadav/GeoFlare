@@ -94,7 +94,11 @@ The processing report records SHA-256 hashes for source CSVs and compressed outp
 
 The present report's absent-date list covers whole calendar years represented by each source. It is not checked against the original requested date interval, footprint, sensor availability, or cloud/observation coverage. An absent date must not be interpreted as zero fires.
 
-Future API ingestion should first adapt incoming names and product metadata to the current input contract, then call the same `normalize_record` logic. API field names and supported product identifiers must be mapped explicitly; support is not complete merely because the normalizer is reusable.
+Saved API ingestion uses the registered `firms-area-csv` adapter and the same
+`normalize_record` logic. VIIRS `bright_ti4` maps to `brightness`; `bright_ti5`
+maps to `bright_t31` as a compatibility name while remaining VIIRS I-5, not MODIS
+band 31. Missing API `type` stays null and flagged. See [api-ingestion.md](api-ingestion.md)
+for supported exact source IDs, descriptors, hashes and validation replay.
 
 ## References
 

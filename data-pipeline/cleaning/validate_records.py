@@ -27,7 +27,7 @@ sys.path.insert(0, str(PIPELINE_DIR))
 
 from cleaning.clean_records import (
     DUPLICATE_COLUMNS, OUTPUT_COLUMNS, REJECT_COLUMNS,
-    absent_calendar_dates, sha256_file,
+    absent_calendar_dates, sha256_file, process_source,
 )
 from schemas.hotspot_schema import PIPELINE_VERSION, normalize_record
 
@@ -153,6 +153,16 @@ def build_request_coverage(datasets, requests):
     for dataset in datasets:
         name = dataset["dataset"]
         request = requests.get(name)
+        descriptor = dataset.get("source_descriptor", {})
+        if request is None and descriptor.get("request"):
+            selection = descriptor["request"]
+            request = {
+                "dataset": name, "source_product": descriptor["source_product"],
+                "api_source": descriptor.get("api_source"),
+                "requested_start": selection["start"], "requested_end": selection["end"],
+                "bbox": selection["bbox"], "area": "bounding_box", "format": "CSV",
+                "response_status": "dataset_supplied", "evidence": "Saved source descriptor",
+            }
         if request:
             require(dataset["source_product"] == request["source_product"],
                     f"{name}: source product differs from request metadata")
@@ -360,12 +370,80 @@ def check_audits(report, run, connection):
     return audit_counts
 
 
+def check_implementation(report, warnings):
+    """Verify the implementation appropriate to the run, without waiving hashes."""
+    version = report.get("implementation_version", "cleaning-v1")
+    require(version in {"cleaning-v1", "cleaning-v2"}, "Unknown cleaning implementation")
+    processor = ("cleaning/legacy/clean_records_v1.py" if version == "cleaning-v1"
+                 else "cleaning/clean_records.py")
+    check_code(PIPELINE_DIR / processor, report["processor_sha256"], warnings)
+    check_code(PIPELINE_DIR / "schemas/hotspot_schema.py", report["normalizer_sha256"], warnings)
+    if version == "cleaning-v2" and report.get("source_manifest"):
+        from ingestion.adapters import load_sources
+        check_code(PIPELINE_DIR / "ingestion/adapters.py", report["adapter_sha256"], warnings)
+        manifest = report["source_manifest"]
+        path = within(PROJECT_ROOT, manifest["path"])
+        require(sha256_file(path) == manifest["sha256"], "Source manifest SHA-256 mismatch")
+        sources = load_sources(path, PROJECT_ROOT)
+        require([source[4] for source in sources] == [d.get("source_descriptor") for d in report["datasets"]],
+                "Source descriptors differ from source manifest")
+        for source, dataset in zip(sources, report["datasets"]):
+            require(source[0] == dataset["dataset"] and source[1] == dataset["source_product"] and
+                    source[2] == within(PROJECT_ROOT, dataset["source_file"]),
+                    "Source descriptor differs from dataset provenance")
+    elif any("source_descriptor" in d for d in report["datasets"]):
+        raise ValueError("Descriptors require a versioned source manifest")
+
+
+def compare_gzip(first, second):
+    with gzip.open(first, "rb") as left, gzip.open(second, "rb") as right:
+        while True:
+            chunk = left.read(1024 * 1024)
+            require(chunk == right.read(1024 * 1024), f"Adapter replay differs: {second.name}")
+            if not chunk:
+                return
+
+
+def check_adapter_replay(report, run):
+    """Replay source adapters, global dedup and audits against the saved bytes."""
+    if not report.get("source_manifest"):
+        return
+    from ingestion.adapters import check_descriptor
+    with tempfile.TemporaryDirectory(prefix="geoflare_adapter_replay_") as directory:
+        replay = Path(directory)
+        connection = sqlite3.connect(replay / "seen.sqlite3")
+        try:
+            connection.execute("CREATE TABLE sources (id INTEGER PRIMARY KEY, path TEXT NOT NULL)")
+            connection.execute("CREATE TABLE seen (id BLOB PRIMARY KEY, source_id INTEGER, source_row INTEGER)")
+            with gzip.open(replay / "rejected_rows.csv.gz", "wt", encoding="utf-8", newline="") as rejects, \
+                    gzip.open(replay / "duplicate_rows.csv.gz", "wt", encoding="utf-8", newline="") as duplicates:
+                rejected_writer = csv.writer(rejects, lineterminator="\n")
+                duplicate_writer = csv.writer(duplicates, lineterminator="\n")
+                rejected_writer.writerow(REJECT_COLUMNS)
+                duplicate_writer.writerow(DUPLICATE_COLUMNS)
+                for dataset in report["datasets"]:
+                    descriptor = dataset["source_descriptor"]
+                    source, adapter = check_descriptor(descriptor, PROJECT_ROOT)
+                    actual = process_source((dataset["dataset"], dataset["source_product"], source),
+                                            replay, connection, rejected_writer, duplicate_writer,
+                                            adapter, descriptor)
+                    for key, value in actual.items():
+                        if key != "output_sha256":
+                            require(value == dataset[key], f"{dataset['dataset']}: adapter replay {key} mismatch")
+                    compare_gzip(replay / actual["output_file"], within(run, dataset["output_file"]))
+            for filename in ("rejected_rows.csv.gz", "duplicate_rows.csv.gz"):
+                compare_gzip(replay / filename, run / filename)
+        finally:
+            connection.close()
+
+
 def validate(run, result, request_manifest=REQUEST_MANIFEST):
     report_path = run / "processing_report.json"
     report_hash = sha256_file(report_path)
     report = json.loads(report_path.read_text(encoding="utf-8-sig"))
     result["processing_report_sha256"] = report_hash
     check_metadata(report)
+    check_implementation(report, result["warnings"])
     manifest_hash = sha256_file(request_manifest) if request_manifest.exists() else None
     requests = load_requests(request_manifest)
     result["request_manifest"] = {"path": str(request_manifest), "sha256": manifest_hash,
@@ -373,9 +451,6 @@ def validate(run, result, request_manifest=REQUEST_MANIFEST):
     result["request_coverage"] = build_request_coverage(report["datasets"], requests)
     for coverage in result["request_coverage"]:
         result["warnings"].extend(coverage_warnings(coverage))
-    for filename, key in (("schemas/hotspot_schema.py", "normalizer_sha256"),
-                          ("cleaning/clean_records.py", "processor_sha256")):
-        check_code(PIPELINE_DIR / filename, report[key], result["warnings"])
     expected = {within(run, d["output_file"]) for d in report["datasets"]}
     actual = {p.resolve() for p in run.rglob("*_clean.csv.gz")}
     require(actual == expected, "Missing or unreported cleaned files in the run directory")
@@ -401,6 +476,8 @@ def validate(run, result, request_manifest=REQUEST_MANIFEST):
         finally:
             connection.close()
     require(sha256_file(report_path) == report_hash, "Processing report changed during validation")
+    check_adapter_replay(report, run)
+    require(sha256_file(report_path) == report_hash, "Processing report changed during adapter replay")
     require((sha256_file(request_manifest) if request_manifest.exists() else None) == manifest_hash,
             "Request manifest changed during validation")
     result["totals"] = report["totals"]

@@ -3,6 +3,7 @@
 from pathlib import Path
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
+import argparse
 import csv
 import gzip
 import hashlib
@@ -141,6 +142,8 @@ def process_source(
     connection,
     rejected,
     duplicates,
+    adapter=None,
+    descriptor=None,
 ):
     dataset, product, csv_path = source
 
@@ -162,6 +165,8 @@ def process_source(
 
     date_cache = {}
     input_hash = sha256_file(csv_path)
+    if descriptor is not None and input_hash != descriptor["sha256"]:
+        raise ValueError(f"{dataset}: descriptor source SHA-256 mismatch")
     blank_rows = 0
 
     source_id = connection.execute(
@@ -177,7 +182,9 @@ def process_source(
         reader = csv.reader(input_file, strict=True)
         header = next(reader, [])
 
-        if (
+        if adapter is not None:
+            adapter.check_header(header)
+        elif (
             len(header) != len(set(header))
             or set(header) != set(SOURCE_COLUMNS)
         ):
@@ -233,7 +240,7 @@ def process_source(
                     input_dates[observed_day] += 1
 
                 try:
-                    record = normalize_record(raw, product)
+                    record = normalize_record(adapter.adapt(raw) if adapter else raw, product)
 
                 except ValueError as error:
                     reason = str(error)
@@ -335,6 +342,7 @@ def process_source(
         )
 
     return {
+        **({"source_descriptor": descriptor} if descriptor is not None else {}),
         "dataset": dataset,
         "source_product": product,
         "source_file": source_file,
@@ -373,7 +381,21 @@ def process_source(
 
 
 def main():
-    sources = discover_sources()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source-manifest", type=Path,
+                        help="Offline source descriptors; defaults to existing archive discovery")
+    args = parser.parse_args()
+    manifest_path = None
+    manifest_hash = None
+    if args.source_manifest is not None:
+        from ingestion.adapters import load_sources
+        manifest_path = args.source_manifest
+        if not manifest_path.is_absolute():
+            manifest_path = PROJECT_ROOT / manifest_path
+        manifest_hash = sha256_file(manifest_path)
+        sources = load_sources(manifest_path, PROJECT_ROOT)
+    else:
+        sources = discover_sources()
 
     run_id = datetime.now(timezone.utc).strftime(
         "run_%Y%m%dT%H%M%S_%fZ"
@@ -387,6 +409,11 @@ def main():
     report = {
         "status": "running",
         "processing_version": PIPELINE_VERSION,
+        "implementation_version": "cleaning-v2",
+        "source_manifest": ({"path": manifest_path.relative_to(PROJECT_ROOT).as_posix(),
+                             "sha256": manifest_hash} if manifest_path else None),
+        "adapter_sha256": (sha256_file(PIPELINE_DIR / "ingestion/adapters.py")
+                           if manifest_path else None),
         "source_files_found": len(sources),
         "normalizer_sha256": sha256_file(
             PIPELINE_DIR / "schemas" / "hotspot_schema.py"
@@ -496,11 +523,12 @@ def main():
                 )
 
                 result = process_source(
-                    source,
+                    source[:3],
                     output_dir,
                     connection,
                     rejected,
                     duplicates,
+                    *(source[3:] if len(source) > 3 else ()),
                 )
 
                 report["datasets"].append(result)
@@ -540,6 +568,8 @@ def main():
         database_path.unlink()
 
         report["totals"] = totals
+        if manifest_path and sha256_file(manifest_path) != manifest_hash:
+            raise RuntimeError("Source manifest changed during processing")
         report["status"] = "complete"
         report["completed_at_utc"] = (
             datetime.now(timezone.utc).isoformat()
