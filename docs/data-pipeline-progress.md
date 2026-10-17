@@ -34,12 +34,32 @@ Updated 17 October 2026. Branch: `feature/sayem-data-pipeline`.
 - Current process, Windows user and machine environments have no `FIRMS_MAP_KEY`. Live smoke test remains pending; no live call was attempted. Exact command is in `docs/api-ingestion.md`.
 - Final regression checks passed: 36 tests under `tests/` (12 archive/reader, 9 offline API, 15 fetcher) and 18 under `data-pipeline/tests/` (11 coverage, 7 report-output), **54 total**. `git diff --check` passed. The dry-run CLI produced the expected nonoverlapping 5-day/2-day plan without network or writes.
 - A synthetic legacy run passed the new validator after processor refactoring, with unchanged original run files. Historical production implementation fingerprints also verified without rerunning production validation.
-- Phase-3 commit/push is next; no additional full production validation or production cleaning has been run.
+- Phase-3 commit `59f5c62` committed and pushed to origin/feature/sayem-data-pipeline. No additional full production validation or production cleaning has been run.
+- After API implementation, all 55 original files were checked again against the same original baseline and still matched. The phase-1 production report hash is unchanged.
 
-## Remaining steps
+## Phase 4: final handoff
 
-1. Commit explicit paths and push the verified phase-3 implementation, then record its hash in the handoff checkpoint.
-2. Live smoke test requires an externally supplied environment key; code and offline tests are complete. Preserve scientific/provenance questions separately from this credential dependency.
+- Setup, dependencies, output paths, adapter provenance, exact coverage variants, streaming use and live commands are documented in `docs/setup-guide.md`, `docs/api-ingestion.md` and `docs/downstream-data-usage.md`.
+- All 54 tests and `git diff --check` passed. Documentation-only final checkpoint records these results; its hash is available with `git log -1 --format=%H` after checkout.
+- No code blocker remains. The live smoke test is **pending**, because no process/user/machine MAP key was configured. Do not report it as passed.
+- External scientific clarification remains necessary for MODIS 2022 `6.03`, J2 2023 January-February absence and the archive-availability discrepancy. Neither code nor missing records resolves those questions.
+- Changes were staged with explicit paths. No main merge, force-push, production cleaning rerun, source-contact message or data transfer to teammates was performed. Production data/reports, ZIPs, caches and secrets remain outside Git.
+
+## Commands for remaining live verification
+
+Configure `FIRMS_MAP_KEY` securely in the process environment, then run from the project root:
+
+```powershell
+python data-pipeline/ingestion/firms_client.py --source VIIRS_NOAA20_SP --start 2024-02-29 --end 2024-02-29 --bbox 80,25,80.1,25.1 --window-days 1 --timeout 30 --retries 1 --output data/raw/api/live_smoke_20240229
+```
+
+Inspect `data/raw/api/live_smoke_20240229/fetch_report.json`. A valid empty CSV is not proof of zero actual fires. Use a new directory if the smoke path exists. Only when a usable response exists, ingestion can be checked with:
+
+```powershell
+python data-pipeline/cleaning/clean_records.py --source-manifest data/raw/api/live_smoke_20240229/sources.json
+```
+
+The cleaner prints the new run directory; validate that new directory with a fresh `--report` filename as documented in the setup guide. Do not run these commands against the historical production run.
 
 The optional `GeoFlare_API_Ingestion_Plan.md` was not found in Downloads; proceed from the user's requirements. No applicable `AGENTS.md` was found in the repository or ancestors.
 
@@ -48,5 +68,5 @@ The optional `GeoFlare_API_Ingestion_Plan.md` was not found in Downloads; procee
 1. Read this file and `git status --short`; inspect current branch and recent commits.
 2. Reuse the successful report named above. Do not rerun production validation or cleaning merely to resume.
 3. Original baseline is already preserved; never replace it with an after-the-fact baseline.
-4. Check the commit/push entries above before doing any remaining checkpoint work. The review ZIP is the original phase-1 snapshot; API code is delivered in subsequent Git commits. Stage explicit paths only; exclude production data, generated reports, ZIPs, caches and secrets.
+4. The implementation is complete. Resume with the pending live smoke test only after a key is available, or with newly supplied provenance evidence. The review ZIP is the original phase-1 snapshot; API code is delivered in subsequent Git commits. Stage explicit paths only; exclude production data, generated reports, ZIPs, caches and secrets.
 5. Preserve the unresolved MODIS `6.03` interpretation, J2 2023 January-February absence and archive-availability discrepancy. Missing records do not establish zero actual fires.
