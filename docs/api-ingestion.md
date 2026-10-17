@@ -176,12 +176,17 @@ selection and unavailable/error windows.
 
 ## Remaining live verification
 
-No live call has been made: `FIRMS_MAP_KEY` was unavailable during implementation.
-After configuring it, this single-day, small-box smoke test is the remaining
-command (choose a new `--output` if this path already exists):
+No live call has been made. The key was unavailable during implementation; a
+later USER-environment launch on 17 October 2026 stopped at the local credential
+format check before any HTTP request or output creation. It did not test an
+empty or nonempty NASA response. See [data-pipeline-progress.md](data-pipeline-progress.md)
+for the redacted diagnosis and exact attempted command. After correcting the
+USER value locally, run this single-day, small-box smoke test in a new directory:
 
 ```powershell
-python data-pipeline/ingestion/firms_client.py --source VIIRS_NOAA20_SP --start 2024-02-29 --end 2024-02-29 --bbox 80,25,80.1,25.1 --window-days 1 --timeout 30 --retries 1 --output data/raw/api/live_smoke_20240229
+$env:FIRMS_MAP_KEY = [Environment]::GetEnvironmentVariable("FIRMS_MAP_KEY", "User")
+$firmsSmokeOutput = 'data/raw/api/live_smoke_' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmss_fffffffZ')
+python data-pipeline/ingestion/firms_client.py --source VIIRS_NOAA20_SP --start 2024-02-29 --end 2024-02-29 --bbox 80,25,80.1,25.1 --window-days 1 --timeout 30 --retries 1 --output $firmsSmokeOutput
 ```
 
 This makes one availability query plus at most one area query, excluding a

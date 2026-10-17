@@ -41,22 +41,40 @@ Updated 17 October 2026. Branch: `feature/sayem-data-pipeline`.
 
 - Setup, dependencies, output paths, adapter provenance, exact coverage variants, streaming use and live commands are documented in `docs/setup-guide.md`, `docs/api-ingestion.md` and `docs/downstream-data-usage.md`.
 - All 54 tests and `git diff --check` passed. Documentation-only final checkpoint records these results; its hash is available with `git log -1 --format=%H` after checkout.
-- No code blocker remains. The live smoke test is **pending**, because no process/user/machine MAP key was configured. Do not report it as passed.
+- No code blocker was identified in offline verification. The live smoke test remains **pending**; the later USER-environment attempt below was blocked by the local credential-format check. Do not report it as passed.
 - External scientific clarification remains necessary for MODIS 2022 `6.03`, J2 2023 January-February absence and the archive-availability discrepancy. Neither code nor missing records resolves those questions.
 - Changes were staged with explicit paths. No main merge, force-push, production cleaning rerun, source-contact message or data transfer to teammates was performed. Production data/reports, ZIPs, caches and secrets remain outside Git.
 
-## Commands for remaining live verification
+## Live verification attempt, 17 October 2026
 
-Configure `FIRMS_MAP_KEY` securely in the process environment, then run from the project root:
+- Loaded `FIRMS_MAP_KEY` from the Windows USER environment into the PowerShell process launching Python, without displaying its value. The repository was clean on `feature/sayem-data-pipeline` at `40a636d` before this attempt.
+- Exact fetch command attempted after loading the variable:
 
 ```powershell
-python data-pipeline/ingestion/firms_client.py --source VIIRS_NOAA20_SP --start 2024-02-29 --end 2024-02-29 --bbox 80,25,80.1,25.1 --window-days 1 --timeout 30 --retries 1 --output data/raw/api/live_smoke_20240229
+$env:FIRMS_MAP_KEY = [Environment]::GetEnvironmentVariable("FIRMS_MAP_KEY", "User")
+python data-pipeline/ingestion/firms_client.py --source VIIRS_NOAA20_SP --start 2024-02-29 --end 2024-02-29 --bbox 80,25,80.1,25.1 --window-days 1 --timeout 30 --retries 1 --output data/raw/api/live_smoke_20261017T174941_9872167Z
 ```
 
-Inspect `data/raw/api/live_smoke_20240229/fetch_report.json`. A valid empty CSV is not proof of zero actual fires. Use a new directory if the smoke path exists. Only when a usable response exists, ingestion can be checked with:
+- Result: CLI exit 1, before output-directory creation or any HTTP request. The USER value is present but does not match the fetcher's accepted character/length format. Safe boolean diagnostics ruled out surrounding whitespace, ordinary quotes, or a recognized bracket/typographic-quote wrapper around a NASA-example-format key. The USER value was not modified, and no credential value or key-bearing URL was printed or saved.
+- No `fetch_report.json`, CSV or source manifest was created. This is a **local launch failure**, not a NASA error response, unavailable interval or valid empty result. Downloaded rows: 0; response row count: unknown because no response was received.
+- Cleaning and validation: **not run**; no usable response exists. Accepted/rejected/duplicate/validated counts are not applicable. Neither the live empty-result path nor nonempty live observations have been verified.
+- All 55 original files still matched the ORIGINAL hash baseline preserved in the phase-1 review ZIP after this attempt. No historical production cleaning or validation was rerun; source versions and provenance flags were not changed.
+- No code change or weakened check is justified by the evidence. Correct the USER environment value locally to the bare NASA MAP key, without pasting it into chat, then retry in a new output directory. The documentation-only checkpoint records the limitation; implementation regression tests were not rerun for a documentation-only change.
+
+## Commands for remaining live verification
+
+After correcting the USER value locally, load it into the launching PowerShell process and choose a fresh output directory:
 
 ```powershell
-python data-pipeline/cleaning/clean_records.py --source-manifest data/raw/api/live_smoke_20240229/sources.json
+$env:FIRMS_MAP_KEY = [Environment]::GetEnvironmentVariable("FIRMS_MAP_KEY", "User")
+$firmsSmokeOutput = 'data/raw/api/live_smoke_' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmss_fffffffZ')
+python data-pipeline/ingestion/firms_client.py --source VIIRS_NOAA20_SP --start 2024-02-29 --end 2024-02-29 --bbox 80,25,80.1,25.1 --window-days 1 --timeout 30 --retries 1 --output $firmsSmokeOutput
+```
+
+Inspect `fetch_report.json` in the printed output directory. A valid empty CSV is not proof of zero actual fires. Only when a usable response exists, ingestion can be checked in the same PowerShell session with:
+
+```powershell
+python data-pipeline/cleaning/clean_records.py --source-manifest "$firmsSmokeOutput/sources.json"
 ```
 
 The cleaner prints the new run directory; validate that new directory with a fresh `--report` filename as documented in the setup guide. Do not run these commands against the historical production run.
@@ -68,5 +86,5 @@ The optional `GeoFlare_API_Ingestion_Plan.md` was not found in Downloads; procee
 1. Read this file and `git status --short`; inspect current branch and recent commits.
 2. Reuse the successful report named above. Do not rerun production validation or cleaning merely to resume.
 3. Original baseline is already preserved; never replace it with an after-the-fact baseline.
-4. The implementation is complete. Resume with the pending live smoke test only after a key is available, or with newly supplied provenance evidence. The review ZIP is the original phase-1 snapshot; API code is delivered in subsequent Git commits. Stage explicit paths only; exclude production data, generated reports, ZIPs, caches and secrets.
+4. Resume the live smoke test after the USER key configuration is corrected; the recorded attempt never reached NASA. Alternatively, review newly supplied provenance evidence. The review ZIP is the original phase-1 snapshot; API code is delivered in subsequent Git commits. Stage explicit paths only; exclude production data, generated reports, ZIPs, caches and secrets.
 5. Preserve the unresolved MODIS `6.03` interpretation, J2 2023 January-February absence and archive-availability discrepancy. Missing records do not establish zero actual fires.
