@@ -1,7 +1,6 @@
 """Versioned, offline FIRMS CSV adapters. No downloads or invented request IDs."""
 import csv
 from datetime import date
-import hashlib
 import json
 import math
 from pathlib import Path
@@ -35,9 +34,10 @@ def check_bbox(value):
 
 class CsvAdapter:
     def __init__(self, identifier, version, product):
-        if (identifier, version) not in {("firms-archive-csv", 1), ("firms-area-csv", 1)}:
+        if (not isinstance(identifier, str) or type(version) is not int or
+                (identifier, version) not in {("firms-archive-csv", 1), ("firms-area-csv", 1)}):
             raise ValueError("Unregistered adapter ID/version")
-        if product not in {"M-C61", "J1V-C2", "J2V-C2"}:
+        if not isinstance(product, str) or product not in {"M-C61", "J1V-C2", "J2V-C2"}:
             raise ValueError("Unsupported canonical product family")
         self.identifier, self.version, self.product = identifier, version, product
 
@@ -78,6 +78,9 @@ def check_descriptor(descriptor, root):
     allowed = required | {"api_source", "request"}
     if not isinstance(descriptor, dict) or not required <= descriptor.keys() or descriptor.keys() - allowed:
         raise ValueError("Unsupported source descriptor fields")
+    if any(not isinstance(descriptor[key], str) or not descriptor[key]
+           for key in ("dataset", "source_file", "source_product", "adapter_id", "sha256")):
+        raise ValueError("Source descriptor text fields must be nonempty strings")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,119}", descriptor["dataset"]):
         raise ValueError("Unsafe dataset identifier")
     if not re.fullmatch(r"[a-f0-9]{64}", descriptor["sha256"]):
@@ -90,13 +93,14 @@ def check_descriptor(descriptor, root):
     if adapter.identifier == "firms-area-csv":
         if descriptor["dataset"].startswith("DL_FIRE_"):
             raise ValueError("API datasets must not impersonate archive request identifiers")
-        if API_SOURCES.get(descriptor.get("api_source")) != descriptor["source_product"]:
+        if (not isinstance(descriptor.get("api_source"), str) or
+                API_SOURCES.get(descriptor.get("api_source")) != descriptor["source_product"]):
             raise ValueError("API source does not match canonical product family")
     elif "api_source" in descriptor:
         raise ValueError("Archive descriptor cannot claim an API source")
     request = descriptor.get("request")
     if request is not None:
-        if set(request) != {"start", "end", "bbox"}:
+        if not isinstance(request, dict) or set(request) != {"start", "end", "bbox"}:
             raise ValueError("Request needs start, end and bbox only")
         if iso_date(request["start"]) > iso_date(request["end"]):
             raise ValueError("Reversed request dates")
@@ -106,7 +110,8 @@ def check_descriptor(descriptor, root):
 
 def load_sources(path, root):
     manifest = json.loads(path.read_text(encoding="utf-8-sig"))
-    if set(manifest) != {"schema_version", "sources"} or manifest["schema_version"] != 1:
+    if (not isinstance(manifest, dict) or set(manifest) != {"schema_version", "sources"} or
+            type(manifest["schema_version"]) is not int or manifest["schema_version"] != 1):
         raise ValueError("Unsupported source manifest")
     if not isinstance(manifest["sources"], list) or not manifest["sources"]:
         raise ValueError("Source manifest has no sources")

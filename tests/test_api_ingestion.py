@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'data-pipeline'))
@@ -74,7 +75,8 @@ class AdapterTests(unittest.TestCase):
                       'adapter_version': 1, 'sha256': '0' * 64, 'api_source': 'VIIRS_NOAA20_SP'}
         check_descriptor(descriptor, ROOT)
         for update in ({'api_source': 'VIIRS_NOAA21_NRT'}, {'source_file': '../outside.csv'},
-                       {'dataset': 'DL_FIRE_J1V-C2_1234'}, {'adapter_version': 99}, {'secret': 'forbidden'}):
+                       {'dataset': 'DL_FIRE_J1V-C2_1234'}, {'adapter_version': 99}, {'secret': 'forbidden'},
+                       {'adapter_version': True}, {'request': []}, {'source_file': None}, {'api_source': []}):
             with self.subTest(update=update), self.assertRaises(ValueError):
                 check_descriptor(dict(descriptor, **update), ROOT)
 
@@ -159,6 +161,36 @@ class SavedIngestionTests(unittest.TestCase):
                                 text=True, capture_output=True, timeout=30)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('descriptor source SHA-256 mismatch', result.stderr)
+
+    def test_legacy_archive_run_validates_after_processor_refactor(self):
+        name = 'DL_FIRE_J1V-C2_990003'
+        source = self.root / 'data/raw/extracted' / name / 'input.csv'
+        source.parent.mkdir(parents=True)
+        shutil.copy2(ROOT / 'tests/fixtures/sayem_cleaning_v1' / (name + '.csv'), source)
+        archive = self.root / 'data/raw/zips' / (name + '.zip')
+        archive.parent.mkdir(parents=True)
+        with ZipFile(archive, 'w') as zipped:
+            zipped.write(source, 'input.csv')
+        processor = self.root / 'data-pipeline/cleaning/clean_records.py'
+        current = processor.read_bytes()
+        processor.write_bytes((self.root / 'data-pipeline/cleaning/legacy/clean_records_v1.py').read_bytes())
+        try:
+            result = subprocess.run([sys.executable, str(processor)], cwd=self.root,
+                                    text=True, capture_output=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        finally:
+            processor.write_bytes(current)
+        run = next((self.root / 'data/processed').iterdir())
+        report = json.loads((run / 'processing_report.json').read_text())
+        self.assertNotIn('implementation_version', report)
+        original_files = {p: p.read_bytes() for p in run.iterdir() if p.is_file()}
+        result = subprocess.run([sys.executable, 'data-pipeline/cleaning/validate_records.py',
+                                 '--run', str(run), '--report', 'legacy-review.json'],
+                                cwd=self.root, text=True, capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads((run / 'legacy-review.json').read_text())['status'], 'passed')
+        for path, data in original_files.items():
+            self.assertEqual(path.read_bytes(), data)
 
 
 if __name__ == '__main__':

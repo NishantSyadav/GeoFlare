@@ -23,14 +23,23 @@ Updated 17 October 2026. Branch: `feature/sayem-data-pipeline`.
 - Added manifest CLI, adapter replay validation and explicit `cleaning-v2` implementation provenance. The original cleaner snapshot preserves strict legacy fingerprint verification.
 - Eight new API regression tests passed, plus 12 cleaning/reader and 18 coverage/report-output tests (38 total). Canonical expectations and six original fixture files remain unchanged.
 - Documented descriptor shape, band aliases, exact API source IDs, NRT/SP distinctions, missing type and request-coverage variants in `docs/api-ingestion.md`.
-- Phase-2 commit/push pending; record hash in the next checkpoint.
+- Phase-2 commit `8ae738f` committed and pushed to origin/feature/sayem-data-pipeline.
 - NASA area, availability and tutorial pages reviewed 17 October 2026. `FIRMS_MAP_KEY` absent from the current environment; no live API request attempted.
 
-## Remaining phases
+## Phase 3: bounded fetching and final handoff
 
-2. Saved-response implementation complete; checkpoint commit/push next.
-3. Check official FIRMS docs, implement bounded fetch/availability/retries/raw-byte provenance, offline tests, and a live smoke test only if an environment key exists.
-4. Finish instructions and handoff, run relevant small tests, commit explicit paths and push logical checkpoints. Do not merge main or send messages.
+- Implemented availability-first area fetching, inclusive 1-5-day windows, 366-day total bound, finite bounding boxes, timeouts, bounded transient retries, redirect refusal and response-size limits.
+- New outputs exclusively created; response attempts, hashes, metadata and request checkpoints preserved. Valid empty, unavailable, data and error outcomes remain distinct. Key-bearing URLs and exceptions are not logged; credential-echo bodies are not saved.
+- Fetch manifests connect to the shared cleaner and adapter-replay validator. An end-to-end mocked fetch/clean/validate test passes; source versions, confidence, flags and all 23 columns remain unchanged.
+- Current process, Windows user and machine environments have no `FIRMS_MAP_KEY`. Live smoke test remains pending; no live call was attempted. Exact command is in `docs/api-ingestion.md`.
+- Final regression checks passed: 36 tests under `tests/` (12 archive/reader, 9 offline API, 15 fetcher) and 18 under `data-pipeline/tests/` (11 coverage, 7 report-output), **54 total**. `git diff --check` passed. The dry-run CLI produced the expected nonoverlapping 5-day/2-day plan without network or writes.
+- A synthetic legacy run passed the new validator after processor refactoring, with unchanged original run files. Historical production implementation fingerprints also verified without rerunning production validation.
+- Phase-3 commit/push is next; no additional full production validation or production cleaning has been run.
+
+## Remaining steps
+
+1. Commit explicit paths and push the verified phase-3 implementation, then record its hash in the handoff checkpoint.
+2. Live smoke test requires an externally supplied environment key; code and offline tests are complete. Preserve scientific/provenance questions separately from this credential dependency.
 
 The optional `GeoFlare_API_Ingestion_Plan.md` was not found in Downloads; proceed from the user's requirements. No applicable `AGENTS.md` was found in the repository or ancestors.
 
@@ -39,5 +48,5 @@ The optional `GeoFlare_API_Ingestion_Plan.md` was not found in Downloads; procee
 1. Read this file and `git status --short`; inspect current branch and recent commits.
 2. Reuse the successful report named above. Do not rerun production validation or cleaning merely to resume.
 3. Original baseline is already preserved; never replace it with an after-the-fact baseline.
-4. Finish any pending review ZIP/commit/push, then continue the remaining phase. Stage explicit paths only; exclude production data, generated reports, ZIPs, caches and secrets.
+4. Check the commit/push entries above before doing any remaining checkpoint work. The review ZIP is the original phase-1 snapshot; API code is delivered in subsequent Git commits. Stage explicit paths only; exclude production data, generated reports, ZIPs, caches and secrets.
 5. Preserve the unresolved MODIS `6.03` interpretation, J2 2023 January-February absence and archive-availability discrepancy. Missing records do not establish zero actual fires.

@@ -478,6 +478,10 @@ def validate(run, result, request_manifest=REQUEST_MANIFEST):
     require(sha256_file(report_path) == report_hash, "Processing report changed during validation")
     check_adapter_replay(report, run)
     require(sha256_file(report_path) == report_hash, "Processing report changed during adapter replay")
+    if report.get("source_manifest"):
+        manifest = report["source_manifest"]
+        require(sha256_file(within(PROJECT_ROOT, manifest["path"])) == manifest["sha256"],
+                "Source manifest changed during validation")
     require((sha256_file(request_manifest) if request_manifest.exists() else None) == manifest_hash,
             "Request manifest changed during validation")
     result["totals"] = report["totals"]

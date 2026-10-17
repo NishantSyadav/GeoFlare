@@ -3,3 +3,7 @@
 # Python cache
 __pycache__/
 *.py[cod]
+# Local credentials; keep the documented empty example tracked.
+.env
+.env.*
+!.env.example
