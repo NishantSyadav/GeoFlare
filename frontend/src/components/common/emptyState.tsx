@@ -1,0 +1,2 @@
+type EmptyStateProps = { title: string; description: string };
+export default function EmptyState({ title, description }: EmptyStateProps) { return <div className="rounded-lg border border-dashed border-white/15 bg-white/[0.02] px-5 py-10 text-center"><p className="font-medium text-slate-200">{title}</p><p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">{description}</p></div>; }

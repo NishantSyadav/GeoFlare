@@ -1,4 +1,11 @@
 
 /// <reference types="vite/client" />
 
-declare module "*.css";
+declare const __USE_MOCK_HOTSPOTS__: boolean;
+
+
+
+declare module "*.css" {
+  const css: string;
+  export default css;
+}

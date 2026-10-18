@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "types": ["vite/client"]
+  },
+  "include": [
+    "**/*",
+    "vite-env.d.ts"
+  ]
+}
