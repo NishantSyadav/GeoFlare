@@ -174,14 +174,21 @@ cannot start a cleaning run. Request coverage in the cleaned run describes only
 the supplied response descriptors; keep the fetch report to retain the full
 selection and unavailable/error windows.
 
-## Remaining live verification
+## Live verification status and optional repeat
 
-No live call has been made. The key was unavailable during implementation; a
-later USER-environment launch on 17 October 2026 stopped at the local credential
-format check before any HTTP request or output creation. It did not test an
-empty or nonempty NASA response. See [data-pipeline-progress.md](data-pipeline-progress.md)
-for the redacted diagnosis and exact attempted command. After correcting the
-USER value locally, run this single-day, small-box smoke test in a new directory:
+On 18 October 2026, after the USER environment value was corrected, the live
+`VIIRS_NOAA20_SP` smoke test for 2024-02-29 and box `80,25,80.1,25.1` succeeded.
+Availability and area returned HTTP 200 without retries. The area result was a
+valid header-only CSV: **0 records**. The shared cleaner completed and the
+validator passed, including adapter replay, on the new small run only. Input,
+accepted, rejected, duplicate and unique-record counts were all zero.
+
+This verifies the **live empty-result path**, not nonempty live observations or
+zero actual fires. The earlier 17 October format-check failure is retained as
+history. See [data-pipeline-progress.md](data-pipeline-progress.md) for exact
+commands, report paths/hashes, the 13 warnings and preservation checks.
+The original requested smoke test is complete; no repeat is required. If a future
+check is needed, reload the USER key without displaying it and use a new directory:
 
 ```powershell
 $env:FIRMS_MAP_KEY = [Environment]::GetEnvironmentVariable("FIRMS_MAP_KEY", "User")
