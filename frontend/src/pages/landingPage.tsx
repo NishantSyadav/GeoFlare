@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 
 export default function LandingPage() {
   return (
-   <section className="grid min-h-[85vh] items-center gap-8 bg-[#0d0a09] px-6 py-12 lg:grid-cols-[1.2fr_0.8fr] lg:px-16">
+   <section className="grid min-h-[85vh] items-center gap-8 bg-[#0d0a09] px-4 py-8 sm:px-6 sm:py-12 lg:grid-cols-[1.2fr_0.8fr] lg:px-16">
   <div className="relative flex items-center justify-center lg:justify-start">
     <div className="w-full max-w-150">
       <InteractiveGlobe2 className="relative z-10" width={600} height={600} />
@@ -16,7 +16,7 @@ export default function LandingPage() {
       Global Fire Intelligence
     </p>
 
-    <h1 className="text-4xl font-semibold leading-tight text-white md:text-6xl">
+    <h1 className="text-3xl font-semibold leading-tight text-white sm:text-4xl md:text-6xl">
       See the fire.
       <span className="block text-orange-400">Before it spreads.</span>
     </h1>

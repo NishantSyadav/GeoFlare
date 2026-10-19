@@ -1,2 +1,16 @@
-type EmptyStateProps = { title: string; description: string };
-export default function EmptyState({ title, description }: EmptyStateProps) { return <div className="rounded-lg border border-dashed border-white/15 bg-white/[0.02] px-5 py-10 text-center"><p className="font-medium text-slate-200">{title}</p><p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">{description}</p></div>; }
+type EmptyStateProps = { title: string; description?: string };
+
+/**
+ * Clean inline empty-state — no dashed borders, no card wrappers.
+ * Just muted typography that sits naturally inside its parent container.
+ */
+export default function EmptyState({ title, description }: EmptyStateProps) {
+  return (
+    <div className="py-8 text-center">
+      <p className="text-sm font-medium text-slate-400">{title}</p>
+      {description && (
+        <p className="mx-auto mt-1.5 max-w-lg text-xs leading-5 text-slate-600">{description}</p>
+      )}
+    </div>
+  );
+}

@@ -2,6 +2,7 @@
 
 
 html {
+  font-size: clamp(16px, 1.1vw, 18px);
   scroll-behavior: smooth;
 }
 
@@ -11,10 +12,17 @@ body {
   min-height: 100vh;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   background: #080b10;
+  overflow-x: hidden;
 }
 
 * {
   box-sizing: border-box;
+}
+
+button,
+input,
+select {
+  max-width: 100%;
 }
 
 ::selection {
